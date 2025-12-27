@@ -48,7 +48,9 @@ int MainWindow::parse_tasks(const std::string &msg)
     std::string part;
 
     while (std::getline(ss, part, '|')) {
-        tokens.push_back(part);
+        if (!part.empty()) {
+            tokens.push_back(part);
+        }
     }
 
     if (tokens.size() < 2)
@@ -67,6 +69,7 @@ int MainWindow::parse_tasks(const std::string &msg)
     if (nr == 0) {
         ui.listWidgetTasks->hide();
         ui.labelTasksTitle->hide();
+        ui.listWidgetTasks->clear();
         return 0;
     }
 
@@ -75,6 +78,7 @@ int MainWindow::parse_tasks(const std::string &msg)
 
     ui.listWidgetTasks->clear();
 
+    
     int index = 2;
     for (int i = 0; i < nr && index + 2 < (int)tokens.size(); i++) {
         QString afis = QString::fromStdString(
@@ -123,7 +127,6 @@ void MainWindow::on_pushButtonSendlog_clicked()
            
         );
     }
-    ui.stackedWidget->setCurrentWidget(ui.mainpage);
 }
 
 
@@ -133,14 +136,27 @@ void MainWindow::on_pushButtonSendSign_clicked()
     std::string user = ui.lineEditUsernameRegister_2->text().toStdString();
     std::string pass = ui.lineEditPasswordRegister->text().toStdString();
     std::string mesaj = sign_up(user, pass, email);
-  if (socket->send(mesaj.c_str(), mesaj.size()) != sf::Socket::Done) {
+    if (socket->send(mesaj.c_str(), mesaj.size()) != sf::Socket::Done) {
         QMessageBox::warning(this, "Eroare", "Nu s-au putut trimite datele de autentificare.");
         return;
     }
-    else
-    {
-    ui.stackedWidget->setCurrentWidget(ui.login);
-}
+    
+    char buffer[1024];
+    std::size_t received = 0;
+    if (socket->receive(buffer, sizeof(buffer), received) != sf::Socket::Done) {
+        QMessageBox::warning(this, "Eroare", "Nu s-a putut primi răspunsul de la server.");
+        return;
+    }
+
+    std::string reply(buffer, received);
+    std::cout << "Raspuns de la server pentru signup: " << reply << std::endl;
+
+    if (reply == "0") {
+        QMessageBox::information(this, "Succes", "Cont creat cu succes! Te poti autentifica.");
+        ui.stackedWidget->setCurrentWidget(ui.login);
+    } else {
+        QMessageBox::warning(this, "Eroare", "Crearea contului a eșuat (posibil user/mail existent).");
+    }
 }
 
 void MainWindow::on_pushButtonSendTask_clicked()

@@ -34,4 +34,4 @@ private:
     std::string loggged_in_user;
 };
 
-#endif // MAINWINDOW_H
+#endif
