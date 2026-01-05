@@ -20,8 +20,92 @@
 #include <atomic>
 #include <error.h>
 
+#include <pthread.h>
+#include <mutex>
+#include <condition_variable>
+#include <atomic>
+#include <queue>
 
 using namespace tinyxml2;
+
+struct ExecTask {
+    int id;
+    std::string command;
+    std::string user;
+};
+
+
+class Mutex {
+private:
+    pthread_mutex_t m_mutex;
+public:
+    Mutex() {
+        pthread_mutex_init(&m_mutex, nullptr);
+    }
+    ~Mutex() {
+        pthread_mutex_destroy(&m_mutex);
+    }
+    void lock() {
+        pthread_mutex_lock(&m_mutex);
+    }
+    void unlock() {
+        pthread_mutex_unlock(&m_mutex);
+    }
+    pthread_mutex_t* native_handle() {
+        return &m_mutex;
+    }
+};
+
+class LockGuard {
+private:
+    Mutex& m_mutex;
+public:
+    LockGuard(Mutex& m) : m_mutex(m) {
+        m_mutex.lock();
+    }
+    ~LockGuard() {
+        m_mutex.unlock();
+    }
+};
+
+class ConditionVariable {
+private:
+    pthread_cond_t m_cond;
+public:
+    ConditionVariable() {
+        pthread_cond_init(&m_cond, nullptr);
+    }
+    ~ConditionVariable() {
+        pthread_cond_destroy(&m_cond);
+    }
+    void wait(Mutex& mutex) {
+        pthread_cond_wait(&m_cond, mutex.native_handle());
+    }
+    
+    template<typename Predicate>
+    void wait(Mutex& mutex, Predicate pred) {
+        while (!pred()) {
+            wait(mutex);
+        }
+    }
+    void notify_one() {
+        pthread_cond_signal(&m_cond);
+    }
+    void notify_all() {
+        pthread_cond_broadcast(&m_cond);
+    }
+};
+
+// resurse shared
+extern std::queue<ExecTask> taskQueue;
+extern Mutex queueMutex;
+extern ConditionVariable queueCond;
+extern std::atomic<bool> reload_needed;
+
+// Thread functions
+void* run_scheduler(void* arg);
+void* run_executor(void* arg);
+void server_main();
 
 class SingInData
 {
@@ -102,6 +186,7 @@ public:
     Data getData() const {return _data;}
     Ora getOra() const {return _ora;}
     std::string getUserName() const {return _user;}
+    int getId() const { return _id; } ///id-ul taskului
 };
 
 //Acount Manager
@@ -124,5 +209,10 @@ void send_message(sf::TcpSocket& sock, const std::string& s);
 bool save_task(const std::string& filePath, const Task& task);
 std::vector<Task> extract_waiting_tasks();
 std::string create_message_login(const std::string username);
+bool remove_task(const int id);
+
+// Runners
+void run_scheduler();
+void run_executor();
 
 #endif
