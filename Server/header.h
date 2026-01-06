@@ -19,12 +19,15 @@
 #include <limits>
 #include <atomic>
 #include <error.h>
-
 #include <pthread.h>
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
 #include <queue>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <ctime>
+#include <cstring>
 
 using namespace tinyxml2;
 
@@ -32,6 +35,16 @@ struct ExecTask {
     int id;
     std::string command;
     std::string user;
+
+     int priority;
+    long long timestamp;
+
+    bool operator<(const ExecTask& other) const {
+        if (priority != other.priority) {
+            return priority < other.priority; 
+        }
+        return timestamp > other.timestamp; 
+    }
 };
 
 
@@ -97,7 +110,7 @@ public:
 };
 
 // resurse shared
-extern std::queue<ExecTask> taskQueue;
+extern std::priority_queue<ExecTask> taskQueue;
 extern Mutex queueMutex;
 extern ConditionVariable queueCond;
 extern std::atomic<bool> reload_needed;
@@ -178,15 +191,18 @@ private:
     Ora _ora; 
     std::string _user;
     int _id;
+    int _priority;
 public:
-    Task():_data(), _ora(), _user(""), _id(-1){};
+    Task():_data(), _ora(), _user(""), _id(-1), _priority(1){};
     Task(std::string str);
-    Task(const int id, const std::string task, const Data data, const Ora ora, const std::string user);
+    Task(const int id, const std::string task, const Data data, const Ora ora, const std::string user, const int priority=1);
     std::vector<std::string> getTask() const {return _task;}
     Data getData() const {return _data;}
     Ora getOra() const {return _ora;}
     std::string getUserName() const {return _user;}
-    int getId() const { return _id; } ///id-ul taskului
+    int getId() const { return _id; } 
+    int getPriority() const { return _priority; }
+    void setPriority(int p) { _priority = p; }
 };
 
 //Acount Manager
@@ -209,6 +225,9 @@ void send_message(sf::TcpSocket& sock, const std::string& s);
 bool save_task(const std::string& filePath, const Task& task);
 std::vector<Task> extract_waiting_tasks();
 std::string create_message_login(const std::string username);
+std::string create_message_history(const std::string username);
+std::string create_message_all(const std::string username);
+std::string create_message_waiting(const std::string username);
 bool remove_task(const int id);
 
 // Runners

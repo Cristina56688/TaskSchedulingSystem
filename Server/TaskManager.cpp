@@ -42,6 +42,17 @@ Task::Task(std::string str):_id(-1)
     getline(ss, ora, '|');
     getline(ss, _user, '|');
 
+      std::string priorityStr;
+    if (getline(ss, priorityStr, '|')) {
+        try {
+            _priority = std::stoi(priorityStr);
+        } catch (...) {
+            _priority = 1; 
+        }
+    } else {
+        _priority = 1; 
+    }
+
     std::stringstream ss2(data); 
     getline(ss2, aux, '.');
     _data.setZi(std::stoi(aux));
@@ -64,7 +75,7 @@ Task::Task(std::string str):_id(-1)
 
 }
 
-Task::Task(const int id, const std::string task, const Data data, const Ora ora, const std::string user):_data(data), _ora(ora), _user(user), _id(id)
+Task::Task(const int id, const std::string task, const Data data, const Ora ora, const std::string user, const int priority):_data(data), _ora(ora), _user(user), _id(id), _priority(priority)
 {
     _task.clear();
 
@@ -123,7 +134,8 @@ bool save_task(const std::string& filePath, const Task& task)
     item->SetAttribute("ora", std::to_string(task.getOra().getOra()).c_str());
     item->SetAttribute("minute", std::to_string(task.getOra().getMin()).c_str());
     item->SetAttribute("secunde", std::to_string(task.getOra().getSec()).c_str());
-
+    item->SetAttribute("priority", std::to_string(task.getPriority()).c_str());
+   
     root->InsertEndChild(item);
 
     if (doc.SaveFile(filePath.c_str()) != XML_SUCCESS)
@@ -233,5 +245,180 @@ std::string create_message_login(const std::string username)
         
     }
 
+    return message;
+}
+
+bool remove_task(const int id)
+{
+    XMLDocument doc;
+    XMLError err = doc.LoadFile(WTFILE);
+    if (err != XML_SUCCESS) {
+        return false;
+    }
+
+    auto* root = doc.FirstChildElement(WTFILE);
+    if (!root) return false;
+
+    XMLElement* taskToDelete = nullptr;
+
+    for (auto* it = root->FirstChildElement("item"); it; it = it->NextSiblingElement("item")) 
+    {
+        int currentId = atoi(it->Attribute("id"));
+        if (currentId == id) {
+            taskToDelete = it;
+            break;
+        }
+    }
+
+    if (taskToDelete) {
+        root->DeleteChild(taskToDelete);
+        if (doc.SaveFile(WTFILE) == XML_SUCCESS)
+            return true;
+    }
+
+    return false;
+}
+
+
+std::string create_message_history(const std::string username)
+{
+    XMLDocument doc;
+#define HISTORY_FILE "history.xml"
+    XMLError err = doc.LoadFile(HISTORY_FILE);
+    if (err != XML_SUCCESS) {
+        return "4||0"; 
+    }
+
+    auto* root = doc.FirstChildElement("History");
+    if (!root) return "4||0";
+
+    std::vector<std::string> historyRecords;
+    for (auto* it = root->FirstChildElement("Entry"); it; it = it->NextSiblingElement("Entry")) 
+    {
+        const char* uAttr = it->Attribute("User");
+        std::string user = uAttr ? uAttr : "";
+       
+        if (user == username) {
+            std::string id = it->Attribute("ID");
+            std::string cmd = it->Attribute("Command");
+            std::string code = it->Attribute("ExitCode");
+            std::string time = it->Attribute("Time");
+            
+            historyRecords.push_back(id + "||" + cmd + "||" + code + "||" + time);
+        }
+    }
+
+    std::string message = "4||" + std::to_string(historyRecords.size());
+    for(const auto& record : historyRecords) {
+        message += "||" + record;
+    }
+    return message;
+}
+
+
+
+std::string create_message_all(const std::string username) {
+    XMLDocument docWait;
+    XMLError errWait = docWait.LoadFile(WTFILE);
+    std::vector<std::string> allRecords;
+    
+    if (errWait == XML_SUCCESS) {
+        auto* root = docWait.FirstChildElement(WTFILE);
+        if (root) {
+             for (auto* it = root->FirstChildElement("item"); it; it = it->NextSiblingElement("item")) {
+                std::string user = it->Attribute("user");
+                if (user == username) {
+                    std::string id = it->Attribute("id");
+                    std::string task = it->Attribute("task");
+                    std::string d = it->Attribute("zi"); d += "."; d += it->Attribute("luna"); d += "."; d += it->Attribute("an");
+                    std::string t = it->Attribute("ora"); t += ":"; t += it->Attribute("minute"); t += ":"; t += it->Attribute("secunde");
+                    
+                    
+                    allRecords.push_back(id + "||" + task + "||" + d + " " + t + "||WAITING");
+                }
+             }
+        }
+    }
+
+    XMLDocument docHist;
+    XMLError errHist = docHist.LoadFile(HISTORY_FILE);
+    if (errHist == XML_SUCCESS) {
+        auto* root = docHist.FirstChildElement("History");
+        if (root) {
+             for (auto* it = root->FirstChildElement("Entry"); it; it = it->NextSiblingElement("Entry")) {
+                const char* uAttr = it->Attribute("User");
+                std::string user = uAttr ? uAttr : "";
+                if (user == username) {
+                    std::string id = it->Attribute("ID");
+                    std::string cmd = it->Attribute("Command");
+                    std::string code = it->Attribute("ExitCode");
+                    std::string time = it->Attribute("Time");
+                    
+                    std::string status = "FINISHED (Code " + code + ")";
+                    allRecords.push_back(id + "||" + cmd + "||" + time + "||" + status);
+                }
+             }
+        }
+    }
+
+    std::string message = "5||" + std::to_string(allRecords.size());
+    for(const auto& record : allRecords) {
+        message += "||" + record;
+    }
+    return message;
+}
+
+
+
+std::string create_message_waiting(const std::string username) {
+    XMLDocument doc;
+#define WTFILE "waitingtasklist.xml"
+    XMLError err = doc.LoadFile(WTFILE);
+    if (err != XML_SUCCESS) return "6||0";
+
+    auto* root = doc.FirstChildElement(WTFILE);
+    if (!root) return "6||0";
+
+    std::vector<std::string> records;
+    time_t now = time(nullptr);
+    tm *ltm = localtime(&now);
+
+    for (auto* it = root->FirstChildElement("item"); it; it = it->NextSiblingElement("item")) {
+        std::string user = it->Attribute("user");
+        if (user == username) {
+            int zi = atoi(it->Attribute("zi"));
+            int luna = atoi(it->Attribute("luna"));
+            int an = atoi(it->Attribute("an"));
+            int ora = atoi(it->Attribute("ora"));
+            int minute = atoi(it->Attribute("minute"));
+            int secunde = atoi(it->Attribute("secunde"));
+            
+            struct tm t = *ltm;
+            t.tm_year = an - 1900;
+            t.tm_mon = luna - 1;
+            t.tm_mday = zi;
+            t.tm_hour = ora;
+            t.tm_min = minute;
+            t.tm_sec = secunde;
+            
+            time_t taskTime = mktime(&t);
+            
+            if (taskTime > now) {
+                std::string id = it->Attribute("id");
+                std::string task = it->Attribute("task");
+                
+                std::string d = std::to_string(zi) + "." + std::to_string(luna) + "." + std::to_string(an);
+                std::string tim = std::to_string(ora) + ":" + std::to_string(minute) + ":" + std::to_string(secunde);
+                
+                
+                records.push_back(id + "||" + task + "||" + d + "||" + tim);
+            }
+        }
+    }
+
+    std::string message = "6||" + std::to_string(records.size());
+    for(const auto& r : records) {
+        message += "||" + r;
+    }
     return message;
 }

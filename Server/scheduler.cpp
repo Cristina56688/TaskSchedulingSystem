@@ -2,61 +2,94 @@
 
 #define WTFILE "waitingtasklist.xml"
 
-std::atomic<bool> reload_needed(false);
 
-std::vector<Task> tasks;
 
-void signal_handler(int sig) {
-    if (sig == SIGUSR1) {
-        reload_needed.store(true);
-    }
-}
-
-void save_pid() {
-
-    int fd=open("planificator.pid", O_CREAT|O_WRONLY|O_TRUNC, S_IRUSR|S_IWUSR);
-    if(fd<0)
-    {
-        std::cerr<<"Eroare in deschiderea fisierului planificator.pid";
-        exit(1);
-    }
-
-    std::string pid=std::to_string(getpid());
-    write(fd, pid.c_str(), pid.size());
-
-    close(fd);
-}
-
-void load_tasks_from_file() {
+void load_tasks_from_file(std::vector<Task>& tasks) {
     std::cout << "[PLANIFICATOR] Reincarc task-urile din fisier...\n";
     tasks=extract_waiting_tasks();
 }
 
 
-int main()
+void* run_scheduler(void* arg)
 {
-    std::cout<<"[PLANIFICATOR]: strat\n";
-    save_pid();
-
-    struct sigaction sa;
-    sa.sa_handler = signal_handler;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
-    sigaction(SIGUSR1, &sa, nullptr);
+    std::cout<<"[PLANIFICATOR]: start\n";
 
     std::vector<Task> tasks=extract_waiting_tasks();
+    time_t last_time = 0;
 
-     
     while (true) {
         if (reload_needed.load()) {
             reload_needed.store(false);
-            load_tasks_from_file();
+            load_tasks_from_file(tasks);
         }
 
-        // logica de planificare
+        time_t now = time(0);
+        if (now != last_time) {
+            last_time = now;
+            tm *ltm = localtime(&now);
+
+            std::vector<ExecTask> batch_tasks;
+            std::vector<int> tasks_to_remove;
+
+            for (auto it = tasks.begin(); it != tasks.end(); ) {
+                const auto& t = *it;
+                
+                struct tm task_tm = *ltm; 
+                task_tm.tm_year = t.getData().getAn() - 1900;
+                task_tm.tm_mon = t.getData().getLuna() - 1;
+                task_tm.tm_mday = t.getData().getZi();
+                task_tm.tm_hour = t.getOra().getOra();
+                task_tm.tm_min = t.getOra().getMin();
+                task_tm.tm_sec = t.getOra().getSec();
+                
+                time_t task_time = mktime(&task_tm);
+
+                if (task_time <= now) {
+                    if (now - task_time > 3600) {
+                        std::cout << "[PLANIFICATOR] Task " << t.getId() << " is too old (" << (now - task_time) << "s ago). Discarding.\n";
+                        remove_task(t.getId());
+                        it = tasks.erase(it);
+                        continue;
+                    }
+                    
+                    std::stringstream ss;
+                    for(const auto& s : t.getTask()) ss << s << " ";
+                    
+                    ExecTask execTask;
+                    execTask.id = t.getId();
+                    execTask.command = ss.str();
+                    execTask.user = t.getUserName();
+                    execTask.priority = t.getPriority(); 
+                    execTask.timestamp = (long long)time(nullptr);
+
+                    batch_tasks.push_back(execTask);
+                    
+                    std::cout << "[PLANIFICATOR] Sent task " << t.getId() << " to executor (Priority: " << execTask.priority << ", User: " << execTask.user << ").\n";
+                    
+                    tasks_to_remove.push_back(t.getId());
+                    it = tasks.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+
+           
+            if (!batch_tasks.empty()) {
+                {
+                    LockGuard lock(queueMutex);
+                    for (const auto& et : batch_tasks) {
+                        taskQueue.push(et);
+                    }
+                }
+                queueCond.notify_all();
+         
+                for (int id : tasks_to_remove) {
+                    remove_task(id);
+                }
+            }
+        }
 
         usleep(100000); 
     }
-
-    return 0;
+    return nullptr;
 }
