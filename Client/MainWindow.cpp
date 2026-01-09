@@ -167,7 +167,7 @@ void MainWindow::on_pushButtonSendlog_clicked()
            
         );
     }
-    ui.stackedWidget->setCurrentWidget(ui.mainpage);
+
 }
 
 
