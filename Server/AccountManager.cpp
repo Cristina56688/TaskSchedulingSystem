@@ -67,8 +67,6 @@ bool addAccount(const std::string& filePath, const SingInData& sd)
     }
 
 
-    // Construim o lista (username, password) existenta pentru a evita duplicatele
-
     std::vector<std::pair<std::string, std::string>> existing;
     for (auto* it = root->FirstChildElement("item"); it; it = it->NextSiblingElement("item")) {
         const char* u = it->Attribute("userName");

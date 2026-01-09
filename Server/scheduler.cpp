@@ -78,7 +78,11 @@ void* run_scheduler(void* arg)
                 {
                     LockGuard lock(queueMutex);
                     for (const auto& et : batch_tasks) {
-                        taskQueue.push(et);
+                        // Verificăm dacă user-ul este deja în listă
+                        if (std::find(userList.begin(), userList.end(), et.user) == userList.end()) {
+                            userList.push_back(et.user);
+                        }
+                        userQueues[et.user].push_back(et);
                     }
                 }
                 queueCond.notify_all();

@@ -88,6 +88,7 @@ static bool handle_request(sf::TcpSocket& client, const std::string& payload) {
             getline(ss, user, '|'); 
 
             std::string msg = create_message_waiting(user);
+            std::cout << "[SERVER] Trimit waiting tasks: " << msg << std::endl;
             send_message(client, msg);
             break;
         }

@@ -380,39 +380,22 @@ std::string create_message_waiting(const std::string username) {
     if (!root) return "6||0";
 
     std::vector<std::string> records;
-    time_t now = time(nullptr);
-    tm *ltm = localtime(&now);
-
     for (auto* it = root->FirstChildElement("item"); it; it = it->NextSiblingElement("item")) {
         std::string user = it->Attribute("user");
         if (user == username) {
-            int zi = atoi(it->Attribute("zi"));
-            int luna = atoi(it->Attribute("luna"));
-            int an = atoi(it->Attribute("an"));
-            int ora = atoi(it->Attribute("ora"));
-            int minute = atoi(it->Attribute("minute"));
-            int secunde = atoi(it->Attribute("secunde"));
+            std::string id = it->Attribute("id");
+            std::string task = it->Attribute("task");
+            std::string zi = it->Attribute("zi");
+            std::string luna = it->Attribute("luna");
+            std::string an = it->Attribute("an");
+            std::string ora = it->Attribute("ora");
+            std::string minute = it->Attribute("minute");
+            std::string secunde = it->Attribute("secunde");
             
-            struct tm t = *ltm;
-            t.tm_year = an - 1900;
-            t.tm_mon = luna - 1;
-            t.tm_mday = zi;
-            t.tm_hour = ora;
-            t.tm_min = minute;
-            t.tm_sec = secunde;
+            std::string d = zi + "." + luna + "." + an;
+            std::string tim = ora + ":" + minute + ":" + secunde;
             
-            time_t taskTime = mktime(&t);
-            
-            if (taskTime > now) {
-                std::string id = it->Attribute("id");
-                std::string task = it->Attribute("task");
-                
-                std::string d = std::to_string(zi) + "." + std::to_string(luna) + "." + std::to_string(an);
-                std::string tim = std::to_string(ora) + ":" + std::to_string(minute) + ":" + std::to_string(secunde);
-                
-                
-                records.push_back(id + "||" + task + "||" + d + "||" + tim);
-            }
+            records.push_back(id + "||" + task + "||" + d + "||" + tim);
         }
     }
 

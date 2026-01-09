@@ -29,6 +29,9 @@
 #include <ctime>
 #include <cstring>
 
+#include <map>
+#include <deque>
+
 using namespace tinyxml2;
 
 struct ExecTask {
@@ -36,8 +39,13 @@ struct ExecTask {
     std::string command;
     std::string user;
 
-     int priority;
+    int priority;
     long long timestamp;
+
+    pid_t pid;           // Procesul leader al grupului
+    bool suspended;      // Dacă task-ul a fost prelucrat parțial (preemptat)
+
+    ExecTask() : id(-1), command(""), user(""), priority(1), timestamp(0), pid(0), suspended(false) {}
 
     bool operator<(const ExecTask& other) const {
         if (priority != other.priority) {
@@ -111,6 +119,11 @@ public:
 
 // resurse shared
 extern std::priority_queue<ExecTask> taskQueue;
+extern std::map<std::string, std::deque<ExecTask>> userQueues; 
+extern std::vector<std::string> userList;                     
+extern int currentUserIndex;                                  
+extern const int TIME_QUANTUM_MS;                             
+
 extern Mutex queueMutex;
 extern ConditionVariable queueCond;
 extern std::atomic<bool> reload_needed;

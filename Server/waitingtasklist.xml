@@ -1,16 +1,2 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<waitingtasklist.xml>
-    <item id="178026328" user="cristina" task="ls -l " zi="19" luna="11" an="2025" ora="23" minute="23" secunde="23"/>
-    <item id="1118880929" user="cristina" task="ls -l " zi="19" luna="11" an="2025" ora="23" minute="23" secunde="23"/>
-    <item id="735632572" user="cristina" task="ls " zi="19" luna="11" an="2025" ora="23" minute="23" secunde="23"/>
-    <item id="626021707" user="cristina" task="ls -l " zi="19" luna="11" an="2025" ora="23" minute="23" secunde="23"/>
-    <item id="833718507" user="cristina" task="ls " zi="19" luna="11" an="2025" ora="23" minute="23" secunde="23"/>
-    <item id="1177449795" user="cristina" task="ls -l " zi="19" luna="11" an="2025" ora="23" minute="23" secunde="23"/>
-    <item id="1960025833" user="cristina" task="ls " zi="19" luna="11" an="2025" ora="23" minute="23" secunde="23"/>
-    <item id="2075949879" user="cristina" task="ls -l " zi="19" luna="11" an="2025" ora="23" minute="23" secunde="23"/>
-    <item id="584348717" user="cristina" task="ls " zi="19" luna="11" an="2025" ora="23" minute="23" secunde="23"/>
-    <item id="1661030812" user="cristina" task="ls -l " zi="19" luna="11" an="2025" ora="23" minute="23" secunde="23"/>
-    <item id="294068937" user="cristina" task="ls " zi="19" luna="11" an="2025" ora="23" minute="23" secunde="23"/>
-    <item id="24329235" user="cristina" task="ls -l " zi="19" luna="11" an="2025" ora="23" minute="23" secunde="23"/>
-    <item id="627216777" user="cristina" task="ls " zi="19" luna="11" an="2025" ora="23" minute="23" secunde="23"/>
-</waitingtasklist.xml>
+<waitingtasklist.xml/>

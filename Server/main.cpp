@@ -2,6 +2,11 @@
 #include <iostream>
 
 std::priority_queue<ExecTask> taskQueue;
+std::map<std::string, std::deque<ExecTask>> userQueues;
+std::vector<std::string> userList;
+int currentUserIndex = 0;
+const int TIME_QUANTUM_MS = 2000;
+
 Mutex queueMutex;
 ConditionVariable queueCond;
 std::atomic<bool> reload_needed(false);
