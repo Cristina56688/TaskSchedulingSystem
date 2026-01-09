@@ -13,7 +13,7 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    explicit MainWindow(sf::TcpSocket *socket, QWidget *parent = nullptr);
+    explicit MainWindow(sf::TcpSocket *socket, const std::string& ip, unsigned short port, QWidget *parent = nullptr);
     void set_username(const std::string& username) { loggged_in_user = username; }
     std::string get_username() const { return loggged_in_user; }
       int parse_tasks(const std::string &msg);
@@ -27,11 +27,17 @@ private slots:
     void on_pushButtonLogOut_clicked();
     void on_pushButtonlogacc_clicked();
     void on_pushButtonsigninacc_clicked();
+    void on_pushButtonWaiting_clicked();
+    void on_pushButtonHistory_clicked();
+    void on_pushButtonAll_clicked();
 
 private:
     Ui::MainWindow ui;
     sf::TcpSocket *socket; 
     std::string loggged_in_user;
+    std::string serverIp;
+    unsigned short serverPort;
+    void checkConnection(); 
 };
 
-#endif
+#endif 

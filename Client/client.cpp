@@ -20,7 +20,7 @@ int main(int argc, char *argv[])
 
     std::cout << "Conectat la serverul " << ip << ":" << port << "\n";
 
-    MainWindow window(&socket);
+    MainWindow window(&socket, ip, port);
     window.show();
 
     return app.exec();
