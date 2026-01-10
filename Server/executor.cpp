@@ -7,7 +7,7 @@
 
 Mutex xmlMutex;
 
-void log_history(int id, const std::string& cmd, int exit_code, const std::string& user) {
+void log_history(int id, const std::string& cmd, int exit_code, const std::string& user, long long duration_ms) {
     LockGuard lock(xmlMutex);
     XMLDocument doc;
     XMLError err = doc.LoadFile(HISTORY_FILE);
@@ -24,7 +24,7 @@ void log_history(int id, const std::string& cmd, int exit_code, const std::strin
     entry->SetAttribute("Command", cmd.c_str());
     entry->SetAttribute("ExitCode", exit_code);
     entry->SetAttribute("User", user.c_str());
-    
+    entry->SetAttribute("DurationMs", (int64_t)duration_ms);
     
     time_t now = time(0);
     char buf[80];
@@ -88,7 +88,7 @@ void* worker_routine(void* arg) {
             
             if (kill(-t.pid, 0) == -1 && errno == ESRCH) {
                 std::cout << "[EXECUTOR] Task " << t.id << " group already dead. Cleaning up.\n";
-                log_history(t.id, t.command, 0, t.user); 
+                log_history(t.id, t.command, 0, t.user, t.total_duration_ms); 
                 continue;
             }
             std::cout << "[EXECUTOR] Resuming task " << t.id << " (PGID: " << t.pid << ")\n";
@@ -135,14 +135,37 @@ void* worker_routine(void* arg) {
 
         if (leader_finished && group_finished) {
             int exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : 0;
-            std::cout << "[EXECUTOR] Task " << t.id << " truly finished (Code: " << exit_code << ")\n";
-            log_history(t.id, t.command, exit_code, t.user);
+            auto now_end = std::chrono::steady_clock::now();
+            t.total_duration_ms += std::chrono::duration_cast<std::chrono::milliseconds>(now_end - start_time).count();
+
+            std::cout << "[EXECUTOR] Task " << t.id << " truly finished (Code: " << exit_code << ", Duration: " << t.total_duration_ms << "ms)\n";
+            log_history(t.id, t.command, exit_code, t.user, t.total_duration_ms);
+            
+            if (t.total_duration_ms > 60000) {
+                std::string userMail = getMailByUserName(t.user);
+                if (!userMail.empty()) {
+                    std::cout << "[EXECUTOR] Task " << t.id << " had abnormal duration (" << t.total_duration_ms << "ms). Sending alert to " << userMail << "\n";
+                    sendAbnormalDurationNotification(userMail, t.id, t.total_duration_ms, t.command);
+                }
+            }
+
+            if (exit_code != 0) {
+                std::string userMail = getMailByUserName(t.user);
+                if (!userMail.empty()) {
+                    std::cout << "[EXECUTOR] Task " << t.id << " failed. Sending mail to " << userMail << "\n";
+                    sendTaskFailureNotification(userMail, t.id, exit_code, t.command);
+                }
+            }
         } else if (preempted) {
             
             if (kill(-t.pid, 0) == 0) {
                 std::cout << "[EXECUTOR] Time quantum expired for task " << t.id << ". Suspending group...\n";
                 kill(-t.pid, SIGSTOP);
                 t.suspended = true;
+
+                auto now_preempt = std::chrono::steady_clock::now();
+                t.total_duration_ms += std::chrono::duration_cast<std::chrono::milliseconds>(now_preempt - start_time).count();
+
                 {
                     LockGuard lock(queueMutex);
                     userQueues[t.user].push_back(t);
@@ -150,7 +173,16 @@ void* worker_routine(void* arg) {
                 queueCond.notify_all();
             } else {
                 std::cout << "[EXECUTOR] Task " << t.id << " finished just at quantum expiration.\n";
-                log_history(t.id, t.command, 0, t.user);
+                auto now_end = std::chrono::steady_clock::now();
+                t.total_duration_ms += std::chrono::duration_cast<std::chrono::milliseconds>(now_end - start_time).count();
+                log_history(t.id, t.command, 0, t.user, t.total_duration_ms);
+
+                if (t.total_duration_ms > 60000) {
+                    std::string userMail = getMailByUserName(t.user);
+                    if (!userMail.empty()) {
+                        sendAbnormalDurationNotification(userMail, t.id, t.total_duration_ms, t.command);
+                    }
+                }
             }
         }
     }

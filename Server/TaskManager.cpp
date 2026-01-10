@@ -1,6 +1,8 @@
 #include "header.h"
+#include <iomanip>
 
 #define WTFILE "waitingtasklist.xml"
+#define HISTORY_FILE "history.xml"
 
 bool exists(const int& x, const std::vector<int>& list)
 {
@@ -34,15 +36,15 @@ Task::Task(std::string str):_id(-1)
     }
 
     std::stringstream ss(temp);
-    std::string buff, aux, data, ora, userName;
+    std::string buff, aux, data_str, ora_str, task_str;
 
-    getline(ss, buff, '|');
-    getline(ss, buff, '|');
-    getline(ss, data, '|');
-    getline(ss, ora, '|');
+    getline(ss, buff, '|'); 
+    getline(ss, task_str, '|');
+    getline(ss, data_str, '|');
+    getline(ss, ora_str, '|');
     getline(ss, _user, '|');
 
-      std::string priorityStr;
+    std::string priorityStr;
     if (getline(ss, priorityStr, '|')) {
         try {
             _priority = std::stoi(priorityStr);
@@ -53,25 +55,26 @@ Task::Task(std::string str):_id(-1)
         _priority = 1; 
     }
 
-    std::stringstream ss2(data); 
-    getline(ss2, aux, '.');
-    _data.setZi(std::stoi(aux));
-    getline(ss2, aux, '.');
-    _data.setLuna(std::stoi(aux));
-    getline(ss2, aux, '.');
-    _data.setAn(std::stoi(aux));
-
-    std::stringstream ss3(ora); 
-    getline(ss3, aux, ':');
-    _ora.setOra(std::stoi(aux));
-    getline(ss3, aux, ':');
-    _ora.setMin(std::stoi(aux));
-    getline(ss3, aux, ':');
-    _ora.setSec(std::stoi(aux));
-
-    std::stringstream ss4(buff);
-    while(ss4>>aux)
+    std::stringstream ssTask(task_str);
+    while (ssTask >> aux) {
         _task.push_back(aux);
+    }
+
+    
+    std::stringstream ss2(data_str); 
+    try {
+        if (getline(ss2, aux, '.')) _data.setZi(std::stoi(aux));
+        if (getline(ss2, aux, '.')) _data.setLuna(std::stoi(aux));
+        if (getline(ss2, aux, '.')) _data.setAn(std::stoi(aux));
+    } catch(...) {}
+
+   
+    std::stringstream ss3(ora_str); 
+    try {
+        if (getline(ss3, aux, ':')) _ora.setOra(std::stoi(aux));
+        if (getline(ss3, aux, ':')) _ora.setMin(std::stoi(aux));
+        if (getline(ss3, aux, ':')) _ora.setSec(std::stoi(aux));
+    } catch(...) {}
 
 }
 
@@ -230,19 +233,34 @@ std::string create_message_login(const std::string username)
     for(auto it=tasks.begin(); it!=tasks.end(); it++)
     {
         message+="||";
+        message+=std::to_string(it->getId()); 
+        
+        message+="||";
         std::vector<std::string> task=it->getTask();
+        std::string t_str = "";
         for(auto i=task.begin(); i!=task.end(); i++)
-            message+=*i+" ";
-        message.pop_back();
+            t_str += *i+" ";
+        if (!t_str.empty()) t_str.pop_back();
+        message += t_str;
 
         message+="||";
         Data data=it->getData();
-        message+=std::to_string(data.getZi())+"."+std::to_string(data.getLuna())+"."+std::to_string(data.getAn());
+        std::ostringstream ossD;
+        ossD << std::setfill('0') << std::setw(2) << data.getZi() << "."
+             << std::setfill('0') << std::setw(2) << data.getLuna() << "."
+             << data.getAn();
+        message += ossD.str();
 
         message+="||";
         Ora ora=it->getOra();
-        message+=std::to_string(ora.getOra())+":"+std::to_string(ora.getMin())+":"+std::to_string(ora.getSec());
-        
+        std::ostringstream ossT;
+        ossT << std::setfill('0') << std::setw(2) << ora.getOra() << ":"
+             << std::setfill('0') << std::setw(2) << ora.getMin() << ":"
+             << std::setfill('0') << std::setw(2) << ora.getSec();
+        message += ossT.str();
+
+        message+="||" + it->getUserName();
+        message+="||WAITING";
     }
 
     return message;
@@ -279,11 +297,57 @@ bool remove_task(const int id)
     return false;
 }
 
+bool modify_task(const Task& task)
+{
+    XMLDocument doc;
+    XMLError err = doc.LoadFile(WTFILE);
+    if (err != XML_SUCCESS) {
+        return false;
+    }
+
+    auto* root = doc.FirstChildElement(WTFILE);
+    if (!root) return false;
+
+    XMLElement* taskToModify = nullptr;
+
+    for (auto* it = root->FirstChildElement("item"); it; it = it->NextSiblingElement("item")) 
+    {
+        int currentId = atoi(it->Attribute("id"));
+        if (currentId == task.getId()) {
+            taskToModify = it;
+            break;
+        }
+    }
+
+    if (taskToModify) {
+        std::string task_str="";
+        std::vector<std::string> aux=task.getTask();
+        for(auto it=aux.begin(); it!=aux.end(); it++)
+        {
+            task_str+=*it+ " ";
+        }
+
+        taskToModify->SetAttribute("task", task_str.c_str());
+        taskToModify->SetAttribute("zi", std::to_string(task.getData().getZi()).c_str());
+        taskToModify->SetAttribute("luna", std::to_string(task.getData().getLuna()).c_str());
+        taskToModify->SetAttribute("an", std::to_string(task.getData().getAn()).c_str());
+        taskToModify->SetAttribute("ora", std::to_string(task.getOra().getOra()).c_str());
+        taskToModify->SetAttribute("minute", std::to_string(task.getOra().getMin()).c_str());
+        taskToModify->SetAttribute("secunde", std::to_string(task.getOra().getSec()).c_str());
+        taskToModify->SetAttribute("priority", std::to_string(task.getPriority()).c_str());
+
+        if (doc.SaveFile(WTFILE) == XML_SUCCESS)
+            return true;
+    }
+
+    return false;
+}
+
+
 
 std::string create_message_history(const std::string username)
 {
     XMLDocument doc;
-#define HISTORY_FILE "history.xml"
     XMLError err = doc.LoadFile(HISTORY_FILE);
     if (err != XML_SUCCESS) {
         return "4||0"; 
@@ -293,29 +357,45 @@ std::string create_message_history(const std::string username)
     if (!root) return "4||0";
 
     std::vector<std::string> historyRecords;
-    for (auto* it = root->FirstChildElement("Entry"); it; it = it->NextSiblingElement("Entry")) 
-    {
+    for (auto* it = root->FirstChildElement("Entry"); it; it = it->NextSiblingElement("Entry")) {
         const char* uAttr = it->Attribute("User");
         std::string user = uAttr ? uAttr : "";
        
         if (user == username) {
-            std::string id = it->Attribute("ID");
-            std::string cmd = it->Attribute("Command");
-            std::string code = it->Attribute("ExitCode");
-            std::string time = it->Attribute("Time");
+            const char* idAttr = it->Attribute("ID");
+            const char* cmdAttr = it->Attribute("Command");
+            const char* codeAttr = it->Attribute("ExitCode");
+            const char* timeAttr = it->Attribute("Time");
+            const char* durAttr = it->Attribute("DurationMs");
             
-            historyRecords.push_back(id + "||" + cmd + "||" + code + "||" + time);
+            std::string id = idAttr ? idAttr : "";
+            std::string cmd = cmdAttr ? cmdAttr : "";
+            std::string code = codeAttr ? codeAttr : "0";
+            std::string timeFull = timeAttr ? timeAttr : "";
+            std::string duration = durAttr ? durAttr : "0";
+            
+            
+            std::string datePart = timeFull;
+            std::string timePart = "";
+            size_t spacePos = timeFull.find(' ');
+            if (spacePos != std::string::npos) {
+                datePart = timeFull.substr(0, spacePos);
+                timePart = timeFull.substr(spacePos + 1);
+            }
+
+            std::string result = (code == "0") ? "SUCCESS (Code 0)" : "FAILURE (Code " + code + ")";
+            
+            // Protocol: ID (F1) || Cmd (F2) || Date (F3) || Time (F4) || Result (F5) || Duration (F6)
+            historyRecords.push_back(id + "||" + cmd + "||" + datePart + "||" + timePart + "||" + result + "||" + duration + "ms");
         }
     }
 
     std::string message = "4||" + std::to_string(historyRecords.size());
-    for(const auto& record : historyRecords) {
+    for (const auto& record : historyRecords) {
         message += "||" + record;
     }
     return message;
 }
-
-
 
 std::string create_message_all(const std::string username) {
     XMLDocument docWait;
@@ -325,18 +405,41 @@ std::string create_message_all(const std::string username) {
     if (errWait == XML_SUCCESS) {
         auto* root = docWait.FirstChildElement(WTFILE);
         if (root) {
-             for (auto* it = root->FirstChildElement("item"); it; it = it->NextSiblingElement("item")) {
-                std::string user = it->Attribute("user");
+              for (auto* it = root->FirstChildElement("item"); it; it = it->NextSiblingElement("item")) {
+                const char* uAttr = it->Attribute("user");
+                std::string user = uAttr ? uAttr : "";
                 if (user == username) {
-                    std::string id = it->Attribute("id");
-                    std::string task = it->Attribute("task");
-                    std::string d = it->Attribute("zi"); d += "."; d += it->Attribute("luna"); d += "."; d += it->Attribute("an");
-                    std::string t = it->Attribute("ora"); t += ":"; t += it->Attribute("minute"); t += ":"; t += it->Attribute("secunde");
+                    const char* idAttr = it->Attribute("id");
+                    const char* taskAttr = it->Attribute("task");
+                    const char* zi = it->Attribute("zi");
+                    const char* luna = it->Attribute("luna");
+                    const char* an = it->Attribute("an");
+                    const char* ora = it->Attribute("ora");
+                    const char* minute = it->Attribute("minute");
+                    const char* secunde = it->Attribute("secunde");
+                    const char* priorityAttr = it->Attribute("priority");
                     
+                    std::string id = idAttr ? idAttr : "";
+                    std::string task = taskAttr ? taskAttr : "";
                     
-                    allRecords.push_back(id + "||" + task + "||" + d + " " + t + "||WAITING");
+                    std::ostringstream ossD;
+                    ossD << std::setfill('0') << std::setw(2) << (zi?atoi(zi):0) << "."
+                         << std::setfill('0') << std::setw(2) << (luna?atoi(luna):0) << "."
+                         << (an?an:"0");
+                    std::string d = ossD.str();
+
+                    std::ostringstream ossT;
+                    ossT << std::setfill('0') << std::setw(2) << (ora?atoi(ora):0) << ":"
+                         << std::setfill('0') << std::setw(2) << (minute?atoi(minute):0) << ":"
+                         << std::setfill('0') << std::setw(2) << (secunde?atoi(secunde):0);
+                    std::string t = ossT.str();
+
+                    std::string p = priorityAttr ? priorityAttr : "1";
+                    
+                    // Protocol: ID || Label || Date || Time || User || Status
+                    allRecords.push_back(id + "||Priority " + p + ": " + task + "||" + d + "||" + t + "||" + user + "||WAITING");
                 }
-             }
+              }
         }
     }
 
@@ -345,19 +448,30 @@ std::string create_message_all(const std::string username) {
     if (errHist == XML_SUCCESS) {
         auto* root = docHist.FirstChildElement("History");
         if (root) {
-             for (auto* it = root->FirstChildElement("Entry"); it; it = it->NextSiblingElement("Entry")) {
+              for (auto* it = root->FirstChildElement("Entry"); it; it = it->NextSiblingElement("Entry")) {
                 const char* uAttr = it->Attribute("User");
                 std::string user = uAttr ? uAttr : "";
                 if (user == username) {
-                    std::string id = it->Attribute("ID");
-                    std::string cmd = it->Attribute("Command");
-                    std::string code = it->Attribute("ExitCode");
-                    std::string time = it->Attribute("Time");
+                    const char* idAttr = it->Attribute("ID");
+                    const char* cmdAttr = it->Attribute("Command");
+                    const char* timeAttr = it->Attribute("Time");
                     
-                    std::string status = "FINISHED (Code " + code + ")";
-                    allRecords.push_back(id + "||" + cmd + "||" + time + "||" + status);
+                    std::string id = idAttr ? idAttr : "";
+                    std::string cmd = cmdAttr ? cmdAttr : "";
+                    std::string timeFull = timeAttr ? timeAttr : "";
+                    
+                    std::string datePart = timeFull;
+                    std::string timePart = "";
+                    size_t spacePos = timeFull.find(' ');
+                    if (spacePos != std::string::npos) {
+                        datePart = timeFull.substr(0, spacePos);
+                        timePart = timeFull.substr(spacePos + 1);
+                    }
+                    
+                    // Protocol: ID || Cmd || Date || Time || User || Status
+                    allRecords.push_back(id + "||" + cmd + "||" + datePart + "||" + timePart + "||" + user + "||EXECUTED");
                 }
-             }
+              }
         }
     }
 
@@ -368,11 +482,8 @@ std::string create_message_all(const std::string username) {
     return message;
 }
 
-
-
 std::string create_message_waiting(const std::string username) {
     XMLDocument doc;
-#define WTFILE "waitingtasklist.xml"
     XMLError err = doc.LoadFile(WTFILE);
     if (err != XML_SUCCESS) return "6||0";
 
@@ -381,21 +492,38 @@ std::string create_message_waiting(const std::string username) {
 
     std::vector<std::string> records;
     for (auto* it = root->FirstChildElement("item"); it; it = it->NextSiblingElement("item")) {
-        std::string user = it->Attribute("user");
+        const char* uAttr = it->Attribute("user");
+        std::string user = uAttr ? uAttr : "";
         if (user == username) {
-            std::string id = it->Attribute("id");
-            std::string task = it->Attribute("task");
-            std::string zi = it->Attribute("zi");
-            std::string luna = it->Attribute("luna");
-            std::string an = it->Attribute("an");
-            std::string ora = it->Attribute("ora");
-            std::string minute = it->Attribute("minute");
-            std::string secunde = it->Attribute("secunde");
+            const char* idAttr = it->Attribute("id");
+            const char* taskAttr = it->Attribute("task");
+            const char* zi = it->Attribute("zi");
+            const char* luna = it->Attribute("luna");
+            const char* an = it->Attribute("an");
+            const char* ora = it->Attribute("ora");
+            const char* minute = it->Attribute("minute");
+            const char* secunde = it->Attribute("secunde");
+            const char* prio = it->Attribute("priority");
             
-            std::string d = zi + "." + luna + "." + an;
-            std::string tim = ora + ":" + minute + ":" + secunde;
+            std::string id = idAttr ? idAttr : "";
+            std::string task = taskAttr ? taskAttr : "";
             
-            records.push_back(id + "||" + task + "||" + d + "||" + tim);
+            std::ostringstream ossD;
+            ossD << std::setfill('0') << std::setw(2) << (zi?atoi(zi):0) << "."
+                 << std::setfill('0') << std::setw(2) << (luna?atoi(luna):0) << "."
+                 << (an?an:"0");
+            std::string d = ossD.str();
+
+            std::ostringstream ossT;
+            ossT << std::setfill('0') << std::setw(2) << (ora?atoi(ora):0) << ":"
+                 << std::setfill('0') << std::setw(2) << (minute?atoi(minute):0) << ":"
+                 << std::setfill('0') << std::setw(2) << (secunde?atoi(secunde):0);
+            std::string tim = ossT.str();
+
+            std::string p = prio ? prio : "1";
+            
+            // Protocol: ID || Task || Date || Time || User || Priority
+            records.push_back(id + "||" + task + "||" + d + "||" + tim + "||" + user + "||" + p);
         }
     }
 

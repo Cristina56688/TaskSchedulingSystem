@@ -1,22 +1,28 @@
 #include "header.h"
 
 bool recv_message(sf::TcpSocket& sock, std::string& out) {
-    char buf[2048];
-    std::size_t n = 0;
-    auto st = sock.receive(buf, sizeof(buf), n);
-    if (st == sf::Socket::Done && n > 0) {
-
-        buf[n]='\0';
-        std::string aux(buf);
-        out=aux;
+    out.clear();
+    char c;
+    std::size_t n;
+    while (true) {
+        auto st = sock.receive(&c, 1, n);
+        if (st == sf::Socket::Done && n == 1) {
+            if (c == '\n') break;
+            out += c;
+        } else if (st == sf::Socket::Disconnected || st == sf::Socket::Error) {
+            return false;
+        } else {
+            if (out.empty()) return false;
+        }
+    }
+    if (!out.empty()) {
         printf("Am primit: %s\n", out.c_str());
         return true;
-        
     }
-    return false; 
+    return false;
 }
 
-
 void send_message(sf::TcpSocket& sock, const std::string& s) {
-    sock.send(s.c_str(), s.size());
+    std::string msg = s + "\n";
+    sock.send(msg.c_str(), msg.size());
 }

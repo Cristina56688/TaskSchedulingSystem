@@ -34,6 +34,10 @@
 
 using namespace tinyxml2;
 
+#define SENDER_EMAIL "cristinaghinoiu40@gmail.com"
+#define SENDER_PASSWORD "zoil jtcx xitr enwe"
+
+
 struct ExecTask {
     int id;
     std::string command;
@@ -42,10 +46,11 @@ struct ExecTask {
     int priority;
     long long timestamp;
 
-    pid_t pid;           // Procesul leader al grupului
-    bool suspended;      // Dacă task-ul a fost prelucrat parțial (preemptat)
+    pid_t pid;          
+    bool suspended;     
+    long long total_duration_ms;
 
-    ExecTask() : id(-1), command(""), user(""), priority(1), timestamp(0), pid(0), suspended(false) {}
+    ExecTask() : id(-1), command(""), user(""), priority(1), timestamp(0), pid(0), suspended(false), total_duration_ms(0) {}
 
     bool operator<(const ExecTask& other) const {
         if (priority != other.priority) {
@@ -218,13 +223,18 @@ public:
     void setPriority(int p) { _priority = p; }
 };
 
-//Acount Manager
+//Account Manager
 bool accountExists(std::vector<std::pair<std::string, std::string>> existing, std::string userName, std::string password);
 bool addAccount(const std::string& filePath, const SingInData& sd);
 bool verifyAccount(const std::string& filePath, const LogInData& ld);
+std::string getMailByUserName(const std::string& userName);
+
 
 //Mail Manager
 void sendAccountCreationConfirmation(const std::string mail);
+void sendTaskFailureNotification(const std::string mail, int taskId, int exitCode, const std::string& command);
+void sendAbnormalDurationNotification(const std::string mail, int taskId, long long duration_ms, const std::string& command);
+
 
 //Utils
 int getIndex(const std::string& str);
@@ -242,9 +252,13 @@ std::string create_message_history(const std::string username);
 std::string create_message_all(const std::string username);
 std::string create_message_waiting(const std::string username);
 bool remove_task(const int id);
+bool modify_task(const Task& task);
 
 // Runners
 void run_scheduler();
 void run_executor();
+
+// History
+void log_history(int id, const std::string& cmd, int exit_code, const std::string& user, long long duration_ms);
 
 #endif

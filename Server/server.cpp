@@ -49,10 +49,12 @@ static bool handle_request(sf::TcpSocket& client, const std::string& payload) {
                 Task task(payload);
                 save_task(WTFILEILE, task);
                 notify_scheduler();
+                send_message(client, "0");
             }
             catch(const std::exception& e)
             {
                 std::cerr<<e.what()<<std::endl;
+                send_message(client, "1");
             }
 
             std::cout<<"Task primit: "<<payload<<std::endl;
@@ -90,6 +92,90 @@ static bool handle_request(sf::TcpSocket& client, const std::string& payload) {
             std::string msg = create_message_waiting(user);
             std::cout << "[SERVER] Trimit waiting tasks: " << msg << std::endl;
             send_message(client, msg);
+            break;
+        }
+        case 7: { // delete: 7||id
+            std::stringstream ss(payload);
+            std::string buff;
+             getline(ss, buff, '|'); 
+             getline(ss, buff, '|'); 
+             getline(ss, buff, '|'); 
+             
+             try {
+                 int id = std::stoi(buff);
+                 if(remove_task(id))
+                 {
+                     send_message(client, "0");
+                     notify_scheduler();
+                 }
+                 else{
+                     send_message(client, "1");
+                 }
+             } catch (...) {
+                 std::cerr << "Error parsing delete ID: " << buff << "\n";
+                 send_message(client, "1");
+             }
+             break;
+        }
+        case 8: { // modify: 8||id||task||data||ora||user||priority
+            std::stringstream ss(payload);
+            std::string buff, temp_str;
+            getline(ss, buff, '|'); 
+            getline(ss, buff, '|'); 
+            getline(ss, buff, '|'); 
+            
+            int id = -1;
+            try {
+                id = std::stoi(buff);
+            } catch (...) {
+                std::cerr << "Error parsing modify ID: " << buff << "\n";
+                send_message(client, "1");
+                break;
+            }
+            
+            std::string task_content, data_str, ora_str, user_str, prio_str;
+             getline(ss, buff, '|'); 
+             getline(ss, task_content, '|');
+             getline(ss, buff, '|'); 
+             getline(ss, data_str, '|');
+             getline(ss, buff, '|'); 
+             getline(ss, ora_str, '|');
+             getline(ss, buff, '|'); 
+             getline(ss, user_str, '|');
+             getline(ss, buff, '|'); 
+             getline(ss, prio_str, '|');
+             
+             int priority = 1;
+             try { priority = std::stoi(prio_str); } catch(...) {}
+
+           
+            std::stringstream ssData(data_str);
+            std::string d_aux;
+            int zi = 0, luna = 0, an = 0;
+            try {
+                if(getline(ssData, d_aux, '.')) zi = stoi(d_aux);
+                if(getline(ssData, d_aux, '.')) luna = stoi(d_aux);
+                if(getline(ssData, d_aux, '.')) an = stoi(d_aux);
+            } catch(...) {}
+
+            
+            std::stringstream ssOra(ora_str);
+            int h, m, s;
+            getline(ssOra, d_aux, ':'); h = stoi(d_aux);
+            getline(ssOra, d_aux, ':'); m = stoi(d_aux);
+            getline(ssOra, d_aux, ':'); s = stoi(d_aux);
+
+            Task t(id, task_content, Data(zi, luna, an), Ora(h, m, s), user_str, priority);
+            
+            if(modify_task(t))
+            {
+                send_message(client, "0");
+                notify_scheduler();
+            }
+            else
+            {
+                send_message(client, "1");
+            }
             break;
         }
         default:

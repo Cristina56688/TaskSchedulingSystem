@@ -144,3 +144,24 @@ bool verifyAccount(const std::string& filePath, const LogInData& ld)
 
     return false;
 }
+
+std::string getMailByUserName(const std::string& userName)
+{
+    XMLDocument doc;
+    XMLError err = doc.LoadFile(FILENAME);
+    if (err != XML_SUCCESS) return "";
+
+    auto* root = doc.FirstChildElement(FILENAME);
+    if (!root) return "";
+
+    for (auto* it = root->FirstChildElement("item"); it; it = it->NextSiblingElement("item")) {
+        const char* u = it->Attribute("userName");
+        const char* m = it->Attribute("mail");
+
+        if (u && m && std::string(u) == userName) {
+            return std::string(m);
+        }
+    }
+
+    return "";
+}
