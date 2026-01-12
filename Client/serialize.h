@@ -8,4 +8,7 @@ std::string get_history(const std::string& username);
 std::string get_all_tasks(const std::string& username);
 std::string get_waiting(const std::string& username);
 std::string log_out();
+std::string modify_task_req(int id, std::string task, std::string data, std::string ora, std::string user, int priority);
+std::string delete_task_req(int id);
+
 #endif

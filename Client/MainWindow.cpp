@@ -5,6 +5,14 @@
 #include <iostream>
 #include<QDebug>
 #include "serialize.h"
+#include <QMenu>
+#include <QInputDialog>
+#include <QFormLayout>
+#include <QDialogButtonBox>
+#include <QDialog>
+#include <QSpinBox>
+#include <QDateEdit>
+#include <QTimeEdit>
 MainWindow::MainWindow(sf::TcpSocket *sock, const std::string& ip, unsigned short port, QWidget *parent)
     : QMainWindow(parent), socket(sock), serverIp(ip), serverPort(port)
 {
@@ -22,7 +30,11 @@ MainWindow::MainWindow(sf::TcpSocket *sock, const std::string& ip, unsigned shor
                         "}");
 
     ui.pushButtonSendlog->setAutoDefault(false);
-ui.pushButtonSendlog->setDefault(false);
+    ui.pushButtonSendlog->setDefault(false);
+    
+    ui.listWidgetTasks->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(ui.listWidgetTasks, &QWidget::customContextMenuRequested, this, &MainWindow::on_contextMenuRequested);
+
 
 
     ui.stackedWidget->setCurrentWidget(ui.welcome);
@@ -60,71 +72,64 @@ void MainWindow::on_pushButtonsignup_clicked()
 int MainWindow::parse_tasks(const std::string &msg)
 {
     std::vector<std::string> tokens;
-    std::stringstream ss(msg);
-    std::string part;
+    std::string temp = msg;
+    size_t pos = 0;
+    std::string delimiter = "||";
 
-    while (std::getline(ss, part, '|')) {
-        if (!part.empty()) {
-            tokens.push_back(part);
-        }
+    while ((pos = temp.find(delimiter)) != std::string::npos) {
+        tokens.push_back(temp.substr(0, pos));
+        temp.erase(0, pos + delimiter.length());
     }
+    tokens.push_back(temp); 
 
     if (tokens.size() < 2)
         return 0;
+
+    std::string type = tokens[0];
     std::string nr_str = tokens[1];
-    bool e_numar = true;
-    for (char c : nr_str) {
-        if (!std::isdigit(c)) {
-            e_numar = false;
-            break;
-        }
+    
+    int nr = 0;
+    try {
+        nr = std::stoi(nr_str);
+    } catch (...) {
+        return 0;
     }
 
-    int nr = e_numar ? std::stoi(nr_str) : 0;
-
     QListWidget* targetWidget = ui.listWidgetTasks;
-    if (tokens[0] == "4" || tokens[0] == "5") {
+    if (type == "4" || type == "5") {
         targetWidget = ui.listWidgetHistory;
     }
 
-    if (nr == 0) {
-        targetWidget->clear();
-        return 0;
-    }
-    
     targetWidget->clear();
+    if (nr <= 0) return 0;
 
     int index = 2;
-    int stride = 3;
-    if (tokens[0] == "4" || tokens[0] == "5" || tokens[0] == "6") stride = 4;
+    int stride = 6; 
 
     for (int i = 0; i < nr && index + (stride - 1) < (int)tokens.size(); i++) {
         QString afis;
-        if (tokens[0] == "2") {
-            afis = QString::fromStdString(tokens[index] + " | " + tokens[index+1] + " | " + tokens[index+2]);
-            index += stride; 
-        } 
-        else if (tokens[0] == "6") {
-             afis = QString::fromStdString(tokens[index+1] + " | " + tokens[index+2] + " | " + tokens[index+3]);
-             index += stride; 
-        }
-        else if (tokens[0] == "4" || tokens[0] == "5") {
-            afis = QString::fromStdString(tokens[index+1] + " | " + tokens[index+2] + " | " + tokens[index+3]);
-            index += stride; 
-        }
+        afis = QString::fromStdString(
+            tokens[index] + " | " + 
+            tokens[index+1] + " | " + 
+            tokens[index+2] + " | " + 
+            tokens[index+3] + " | " + 
+            tokens[index+4] + " | " + 
+            tokens[index+5]
+        );
+        
         targetWidget->addItem(afis);
+        index += stride; 
     }
     return nr;
 }
 
 
 void MainWindow::on_pushButtonWaiting_clicked() {
+    drain_socket();
     std::string msg = get_waiting(this->get_username());
     if(socket->send(msg.c_str(), msg.size()) == sf::Socket::Done) {
-         char buffer[8192];
-         size_t received;
-         if(socket->receive(buffer, sizeof(buffer), received) == sf::Socket::Done) {
-             std::string reply(buffer, received);
+         std::string reply;
+         if(receive_message(reply)) {
              parse_tasks(reply);
          }
     }
@@ -140,20 +145,17 @@ void MainWindow::on_pushButtonSendlog_clicked()
     std::string mesaj = log_in(user, pass);
 
     if (socket->send(mesaj.c_str(), mesaj.size()) != sf::Socket::Done) {
-        QMessageBox::warning(this, "Eroare", "Nu s-a putut trimite datele de autentificare.");
+        QMessageBox::warning(this, "Error", "log in data couldn't be sent.");
         return;
     }
 
-    char buffer[4096]; 
-    std::size_t received = 0;
-
-    if (socket->receive(buffer, sizeof(buffer), received) != sf::Socket::Done) {
-        QMessageBox::warning(this, "Eroare", "Nu s-a putut primi răspunsul de la server.");
+    std::string reply;
+    if (!receive_message(reply)) {
+        QMessageBox::warning(this, "Error", "Couldn't get response from server.");
         return;
     }
 
-    std::string reply(buffer, received);
-    std::cout<<"Raspuns de la server pentru log:"<<reply<<std::endl;
+    std::cout<<"Server response for log:"<<reply<<std::endl;
     if(reply[0] == '2') { 
  
         set_username(user);
@@ -162,8 +164,8 @@ void MainWindow::on_pushButtonSendlog_clicked()
     } else {
         QMessageBox::warning(
             this,
-            "Eroare",
-            "Autentificare eșuată. Verifică username-ul și parola."
+            "Error",
+            "Check the username and password."
            
         );
     }
@@ -182,29 +184,27 @@ void MainWindow::on_pushButtonSendSign_clicked()
     std::string mesaj = sign_up(user, pass, email);
 
     if (socket->send(mesaj.c_str(), mesaj.size()) != sf::Socket::Done) {
-        QMessageBox::warning(this, "Eroare", "Nu s-au putut trimite datele de inregistrare.");
+        QMessageBox::warning(this, "Error", "sign in data couldn't be sent.");
         return;
     }
 
-    char buffer[1024];
-    std::size_t received = 0;
-    if (socket->receive(buffer, sizeof(buffer), received) != sf::Socket::Done) {
-        QMessageBox::warning(this, "Eroare", "Nu s-a putut primi răspunsul de la server.");
+    std::string reply;
+    if (!receive_message(reply)) {
+        QMessageBox::warning(this, "Error", "Couldn't get response from server.");
         return;
     }
     
-    std::string reply(buffer, received);
     if (reply == "0") {
-        QMessageBox::information(this, "Succes", "Cont creat cu succes! Te poti autentifica.");
+        QMessageBox::information(this, "Success", "Account created! You can log in.");
         ui.stackedWidget->setCurrentWidget(ui.login);
     } else {
-        QMessageBox::warning(this, "Eroare", "Crearea contului a esuat. Posibil user existent.");
+        QMessageBox::warning(this, "Error", "Account creation failed. The user already exists.");
     }
 }
 
 void MainWindow::on_pushButtonSendTask_clicked()
 {
-
+    drain_socket();
     std::string task = ui.lineEdit_3->text().toStdString();
 
     QDate date = ui.calendarWidget->selectedDate();
@@ -217,16 +217,19 @@ void MainWindow::on_pushButtonSendTask_clicked()
     std::string mesaj = add_task(task, data, ora, this->get_username(), priority);
     std::cout<<mesaj<<std::endl;
     if (socket->send(mesaj.c_str(), mesaj.size()) != sf::Socket::Done) {
-        QMessageBox::warning(this, "Eroare", "Nu s-a putut trimite task ul.");
+        QMessageBox::warning(this, "Error", "Couldn't send the task.");
         return;
     }
 
+    std::string reply;
+    receive_message(reply); 
 }
 void MainWindow::on_pushButtonLogOut_clicked()
 {
+    drain_socket();
     std::string mesaj = log_out();
     if (socket->send(mesaj.c_str(), mesaj.size()) != sf::Socket::Done) {
-        QMessageBox::warning(this, "Eroare", "Nu s-a putut trimite cererea de logout.");
+        QMessageBox::warning(this, "Error", "log out request couldn't be sent.");
         return;
     }
     ui.stackedWidget->setCurrentWidget(ui.welcome);
@@ -245,25 +248,166 @@ void MainWindow::on_pushButtonsigninacc_clicked()
 
 
 void MainWindow::on_pushButtonHistory_clicked() {
+    drain_socket();
     std::string msg = get_history(this->get_username());
     if(socket->send(msg.c_str(), msg.size()) == sf::Socket::Done) {
-         char buffer[8192];
-         size_t received;
-         if(socket->receive(buffer, sizeof(buffer), received) == sf::Socket::Done) {
-             std::string reply(buffer, received);
+         std::string reply;
+         if(receive_message(reply)) {
              parse_tasks(reply);
          }
     }
 }
 
 void MainWindow::on_pushButtonAll_clicked() {
+    drain_socket();
     std::string msg = get_all_tasks(this->get_username());
     if(socket->send(msg.c_str(), msg.size()) == sf::Socket::Done) {
-         char buffer[8192];
-         size_t received;
-         if(socket->receive(buffer, sizeof(buffer), received) == sf::Socket::Done) {
-             std::string reply(buffer, received);
+         std::string reply;
+         if(receive_message(reply)) {
              parse_tasks(reply);
          }
     }
+}
+
+void MainWindow::on_contextMenuRequested(const QPoint &pos)
+{
+    QListWidgetItem *item = ui.listWidgetTasks->itemAt(pos);
+    if (!item) return;
+
+    QMenu contextMenu(tr("Context menu"), this);
+
+    QAction actionDelete("Delete Task", this);
+    connect(&actionDelete, &QAction::triggered, this, &MainWindow::delete_current_task);
+    contextMenu.addAction(&actionDelete);
+
+    QAction actionModify("Modify Task", this);
+    connect(&actionModify, &QAction::triggered, this, &MainWindow::modify_current_task);
+    contextMenu.addAction(&actionModify);
+
+    contextMenu.exec(ui.listWidgetTasks->mapToGlobal(pos));
+}
+
+void MainWindow::delete_current_task()
+{
+    QListWidgetItem *item = ui.listWidgetTasks->currentItem();
+    if(!item) return;
+
+    QString text = item->text();
+    QStringList parts = text.split('|');
+    if(parts.size() < 1) return;
+
+    int id = parts[0].trimmed().toInt();
+
+    std::string msg = delete_task_req(id);
+    if(socket->send(msg.c_str(), msg.size()) == sf::Socket::Done) {
+         std::string reply;
+         if(receive_message(reply)) {
+             if(reply == "0") {
+            
+                 on_pushButtonWaiting_clicked(); 
+             } else {
+                 QMessageBox::warning(this, "Error", "Failed to delete task.");
+             }
+         }
+    }
+}
+
+void MainWindow::modify_current_task()
+{
+    QListWidgetItem *item = ui.listWidgetTasks->currentItem();
+    if(!item) return;
+
+    QString text = item->text();
+    QStringList parts = text.split('|');
+    if(parts.size() < 3) return;
+
+    int id = parts[0].trimmed().toInt();
+    QString currentDesc = parts[1].trimmed();
+    QString dateTimeStr = parts[2].trimmed();
+    
+    QDateTime dt = QDateTime::fromString(dateTimeStr, "d.M.yyyy H:m:s");
+
+    QDialog dialog(this);
+    dialog.setWindowTitle("Modify Task");
+    QFormLayout form(&dialog);
+
+    QLineEdit *descEdit = new QLineEdit(&dialog);
+    descEdit->setText(currentDesc);
+    form.addRow("Task:", descEdit);
+
+    QDateEdit *dateEdit = new QDateEdit(&dialog);
+    dateEdit->setDate(dt.date());
+    form.addRow("Date:", dateEdit);
+
+    QTimeEdit *timeEdit = new QTimeEdit(&dialog);
+    timeEdit->setTime(dt.time());
+    form.addRow("Time:", timeEdit);
+
+    QSpinBox *prioBox = new QSpinBox(&dialog);
+    prioBox->setRange(1, 10);
+    prioBox->setValue(1);
+    form.addRow("Priority:", prioBox);
+
+    QDialogButtonBox buttonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, Qt::Horizontal, &dialog);
+    form.addRow(&buttonBox);
+    QObject::connect(&buttonBox, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    QObject::connect(&buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    if (dialog.exec() == QDialog::Accepted) {
+        std::string task = descEdit->text().toStdString();
+        std::string data = dateEdit->date().toString("dd.MM.yyyy").toStdString();
+        std::string ora = timeEdit->time().toString("HH:mm:ss").toStdString();
+        int priority = prioBox->value();
+
+        std::string msg = modify_task_req(id, task, data, ora, this->get_username(), priority);
+        
+        if(socket->send(msg.c_str(), msg.size()) == sf::Socket::Done) {
+             std::string reply;
+             if(receive_message(reply)) {
+                 if(reply == "0") {
+            
+                     on_pushButtonWaiting_clicked(); 
+                 } else {
+                     QMessageBox::warning(this, "Error", "Failed to modify task.");
+                 }
+             }
+        }
+    }
+}
+
+bool MainWindow::receive_message(std::string &out) {
+    out.clear();
+    char c;
+    std::size_t n;
+    
+    sf::SocketSelector selector;
+    selector.add(*socket);
+
+    while (true) {
+        if (selector.wait(sf::seconds(3))) {
+            auto st = socket->receive(&c, 1, n);
+            if (st == sf::Socket::Done && n == 1) {
+                if (c == '\n') break;
+                out += c;
+            } else if (st == sf::Socket::Disconnected || st == sf::Socket::Error) {
+                return false;
+            } else {
+                 if(st == sf::Socket::NotReady) continue;
+                 return false;
+            }
+        } else {
+            return false;
+        }
+    }
+    return !out.empty();
+}
+
+bool MainWindow::drain_socket() {
+    socket->setBlocking(false);
+    char d;
+    std::size_t received;
+    while (socket->receive(&d, 1, received) == sf::Socket::Done) {
+    }
+    socket->setBlocking(true);
+    return true;
 }

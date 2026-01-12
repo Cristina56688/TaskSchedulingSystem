@@ -30,6 +30,9 @@ private slots:
     void on_pushButtonWaiting_clicked();
     void on_pushButtonHistory_clicked();
     void on_pushButtonAll_clicked();
+    void on_contextMenuRequested(const QPoint &pos);
+    void delete_current_task();
+    void modify_current_task();
 
 private:
     Ui::MainWindow ui;
@@ -37,7 +40,9 @@ private:
     std::string loggged_in_user;
     std::string serverIp;
     unsigned short serverPort;
-    void checkConnection(); 
+    void checkConnection();
+    bool receive_message(std::string &out);
+    bool drain_socket();
 };
 
 #endif 

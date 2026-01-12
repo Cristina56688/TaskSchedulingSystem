@@ -9,8 +9,8 @@ int main(int argc, char *argv[])
 
     sf::TcpSocket socket;
 
-   //std::string ip = "192.168.116.50";
-  std::string ip = "127.0.0.1";
+   std::string ip = "192.168.170.50";
+  //std::string ip = "127.0.0.1";
     unsigned short port = 54000;
 
     if (socket.connect(ip, port) != sf::Socket::Done) {
