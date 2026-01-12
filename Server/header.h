@@ -54,7 +54,7 @@ struct ExecTask {
 
     bool operator<(const ExecTask& other) const {
         if (priority != other.priority) {
-            return priority < other.priority; 
+            return priority > other.priority;
         }
         return timestamp > other.timestamp; 
     }
@@ -124,7 +124,7 @@ public:
 
 // resurse shared
 extern std::priority_queue<ExecTask> taskQueue;
-extern std::map<std::string, std::deque<ExecTask>> userQueues; 
+extern std::map<std::string, std::priority_queue<ExecTask>> userQueues; 
 extern std::vector<std::string> userList;                     
 extern int currentUserIndex;                                  
 extern const int TIME_QUANTUM_MS;                             

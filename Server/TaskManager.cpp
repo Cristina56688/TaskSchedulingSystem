@@ -182,7 +182,13 @@ std::vector<Task> extract_waiting_tasks()
         int minute = atoi(it->Attribute("minute"));
         int secunde = atoi(it->Attribute("secunde"));
 
-        existing.push_back(Task(id, task, Data(zi, luna, an), Ora(ora, minute, secunde), user));
+        int priority = 1;
+        const char* priorityAttr = it->Attribute("priority");
+        if (priorityAttr) {
+            priority = atoi(priorityAttr);
+        }
+
+        existing.push_back(Task(id, task, Data(zi, luna, an), Ora(ora, minute, secunde), user, priority));
     }
 
     return existing;
