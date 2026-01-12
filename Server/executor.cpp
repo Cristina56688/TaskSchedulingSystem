@@ -53,8 +53,8 @@ void* worker_routine(void* arg) {
                 int idx = (currentUserIndex + i) % n;
                 const std::string& user = userList[idx];
                 if (!userQueues[user].empty()) {
-                    t = userQueues[user].front();
-                    userQueues[user].pop_front();
+                    t = userQueues[user].top();
+                    userQueues[user].pop();
                     currentUserIndex = (idx + 1) % n;
                     found = true;
                     break;
@@ -168,7 +168,7 @@ void* worker_routine(void* arg) {
 
                 {
                     LockGuard lock(queueMutex);
-                    userQueues[t.user].push_back(t);
+                    userQueues[t.user].push(t);
                 }
                 queueCond.notify_all();
             } else {
